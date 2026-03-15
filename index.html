@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="description" content="Pixel Word Hunter - TOEIC Edition: Learn 600 business English words with adaptive spaced repetition. Master TOEIC vocabulary through a retro pixel-art quiz game.">
+  <title>Pixel Word Hunter</title>
+  
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/pwhbeta/manifest.json">
+  <link rel="icon" href="assets/favicon.ico">
+  
+  <!-- iOS PWA Support -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Word Hunter">
+  <link rel="apple-touch-icon" href="assets/logo.png">
+  
+  <!-- Theme Color -->
+  <meta name="theme-color" content="#0a0010">
+  
+  <!-- Preconnect to critical origins -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://fonts.gstatic.com">
+ 
+  <!-- Preload font file for instant text rendering -->
+  <link rel="preload" href="https://fonts.gstatic.com/s/pressstart2p/v16/e3t4euO8T-267oIAQAu6jDQyK0nS.ttf" as="font" type="font/ttf" crossorigin fetchpriority="high">
+  
+  <!-- Preload JSON data -->
+  <link rel="preload" href="words_optimized.json" as="fetch" crossorigin>
+  
+  <!-- Critical CSS - Inlined for fast first paint -->
+  <style>
+    @font-face {
+      font-family: 'Press Start 2P';
+      font-style: normal;
+      font-weight: 400;
+      font-display: swap;
+      src: local('Press Start 2P Regular'), local('PressStart2P-Regular'), url('https://fonts.gstatic.com/s/pressstart2p/v16/e3t4euO8T-267oIAQAu6jDQyK0nS.ttf') format('truetype');
+    }
+    html, body { height: 100%; width: 100%; overflow: hidden; font-family: 'Press Start 2P', monospace; background: #0a0010; color: #f0e6ff; }
+    .game-container { height: 100vh; width: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 20px; position: relative; overflow: hidden; contain: layout style; }
+    .game-container::before { content: ''; position: absolute; inset: 0; background: linear-gradient(rgba(191,95,255,0.07) 1px, transparent 1px), linear-gradient(90deg, rgba(191,95,255,0.07) 1px, transparent 1px); background-size: 40px 40px; transform: perspective(400px) rotateX(45deg) scaleX(1.5); transform-origin: bottom center; z-index: -1; contain: strict; }
+    .game-container::after { content: ''; position: absolute; bottom: 0; left: -20%; right: -20%; height: 50%; background: linear-gradient(to top, rgba(255,45,120,0.08) 0%, transparent 100%); z-index: -1; contain: strict; }
+    .hidden { display: none !important; }
+    .game-title { font-size: clamp(18px, 5vw, 36px); line-height: 1.5; text-align: center; margin-bottom: 18px; letter-spacing: 4px; color: var(--neon-cyan); text-shadow: var(--shadow-cyan); }
+    .edition-badge { font-size: 9px; color: var(--neon-purple); text-shadow: var(--shadow-purple); letter-spacing: 6px; margin-bottom: 28px; }
+    .stats-line { font-size: 9px; color: var(--neon-green); text-shadow: 0 0 6px var(--neon-green); margin-bottom: 30px; letter-spacing: 2px; }
+    .blink { font-size: 10px; color: var(--neon-pink); text-shadow: var(--shadow-pink); margin-bottom: 28px; }
+    
+    /* ===== AUTH SYSTEM (Critical CSS) ===== */
+    .auth-buttons { display: flex; flex-direction: column; gap: 12px; margin-top: 20px; }
+    .auth-btn { padding: 16px 36px; font-family: inherit; font-size: 14px; background: transparent; color: var(--neon-cyan); border: 2px solid var(--neon-cyan); border-radius: 0; cursor: pointer; text-shadow: var(--shadow-cyan); box-shadow: 0 0 12px rgba(0,245,255,0.5), inset 0 0 12px rgba(0,245,255,0.08); letter-spacing: 3px; transition: all 0.2s; -webkit-clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%); clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%); min-height: 44px; min-width: 140px; }
+    .auth-btn:hover { background: rgba(0,245,255,0.15); box-shadow: 0 0 24px rgba(0,245,255,0.8), inset 0 0 20px rgba(0,245,255,0.2); color: #fff; }
+    .register-btn { color: var(--neon-purple); border-color: var(--neon-purple); text-shadow: var(--shadow-purple); box-shadow: 0 0 12px rgba(191,95,255,0.5), inset 0 0 12px rgba(191,95,255,0.08); }
+    .register-btn:hover { background: rgba(191,95,255,0.15); box-shadow: 0 0 24px rgba(191,95,255,0.8), inset 0 0 20px rgba(191,95,255,0.2); }
+    .hunt-btn.hidden, .auth-buttons.hidden { display: none !important; }
+    .auth-modal { z-index: 200; }
+    .auth-container { position: relative; width: min(380px, 90%); padding: 32px 24px; background: rgba(10, 0, 20, 0.95); border: 2px solid var(--neon-purple); box-shadow: 0 0 30px rgba(191,95,255,0.4); }
+    .auth-form { display: flex; flex-direction: column; gap: 14px; width: 100%; }
+    .auth-field { display: flex; flex-direction: column; gap: 6px; }
+    .auth-field label { font-size: 9px; color: var(--neon-purple); text-shadow: var(--shadow-purple); letter-spacing: 2px; }
+    .auth-field input { padding: 12px 14px; font-family: inherit; font-size: 16px; background: rgba(0,0,0,0.6); border: 1px solid var(--text-dim); color: var(--text-main); outline: none; transition: all 0.2s; min-height: 44px; }
+    .auth-field input:focus { border-color: var(--neon-cyan); box-shadow: 0 0 12px rgba(0,245,255,0.3); color: var(--neon-cyan); }
+    .auth-error { font-size: 9px; color: var(--neon-pink); text-shadow: var(--shadow-pink); min-height: 18px; text-align: center; }
+    .auth-submit { margin-top: 8px; padding: 14px 32px; font-family: inherit; font-size: 12px; background: transparent; color: var(--neon-green); border: 2px solid var(--neon-green); cursor: pointer; letter-spacing: 3px; text-shadow: 0 0 8px var(--neon-green); box-shadow: 0 0 12px rgba(57,255,20,0.4); transition: all 0.2s; min-height: 44px; }
+    .auth-submit:hover { background: rgba(57,255,20,0.15); box-shadow: 0 0 24px rgba(57,255,20,0.7); }
+    .auth-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+    .auth-toggle { margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 9px; color: var(--text-dim); }
+    .auth-toggle-btn { background: transparent; border: none; color: var(--neon-cyan); font-family: inherit; font-size: 9px; cursor: pointer; text-decoration: underline; padding: 4px; min-height: 44px; }
+    .auth-toggle-btn:hover { color: var(--neon-yellow); text-shadow: 0 0 8px var(--neon-yellow); }
+    .auth-close { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; background: transparent; border: 1px solid var(--text-dim); color: var(--text-dim); font-family: inherit; font-size: 14px; cursor: pointer; transition: all 0.2s; }
+    .auth-close:hover { border-color: var(--neon-pink); color: var(--neon-pink); }
+    .ios-notification { position: fixed; top: 0; left: 50%; transform: translateX(-50%) translateY(-100%); background: rgba(30, 30, 30, 0.92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); padding: 14px 24px; border-radius: 0 0 20px 20px; display: flex; align-items: center; gap: 12px; z-index: 10000; box-shadow: 0 4px 24px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); border-top: none; min-width: 280px; transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    .ios-notification.show { transform: translateX(-50%) translateY(0); }
+    .notification-icon { font-size: 20px; }
+    .notification-text { font-size: 12px; color: #fff; letter-spacing: 1px; }
+    .user-info { position: absolute; top: 14px; right: 14px; display: flex; align-items: center; gap: 10px; font-size: 9px; color: var(--neon-cyan); }
+    .user-info button { background: transparent; border: 1px solid var(--neon-pink); color: var(--neon-pink); font-family: inherit; font-size: 8px; padding: 6px 12px; cursor: pointer; min-height: 32px; }
+    .user-info button:hover { background: rgba(255,45,120,0.15); box-shadow: 0 0 12px rgba(255,45,120,0.5); }
+    @media (max-width: 480px) { .auth-container { padding: 24px 16px; } .auth-btn { padding: 14px 28px; font-size: 12px; } }
+    /* Delete Account Button */
+.delete-account-btn {
+  background: transparent;
+  color: var(--neon-pink);
+  border: 2px solid var(--neon-pink);
+  padding: 16px 36px;
+  font-family: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  text-shadow: 0 0 8px var(--neon-pink);
+  box-shadow: 0 0 12px rgba(255,45,120,0.4);
+  transition: all 0.2s;
+  letter-spacing: 2px;
+  min-height: 52px;
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  -webkit-clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+  clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+}
+.delete-account-btn:hover {
+  background: rgba(255,45,120,0.15);
+  box-shadow: 0 0 24px rgba(255,45,120,0.7);
+}
+
+/* Delete Modal */
+.delete-modal {
+  z-index: 300;
+}
+.delete-modal .modal-container {
+  background: rgba(10, 0, 20, 0.95);
+  border: 2px solid var(--neon-pink);
+  box-shadow: 0 0 30px rgba(255,45,120,0.4);
+  padding: 32px;
+  max-width: 380px;
+  margin: auto;
+}
+.delete-warning {
+  color: var(--neon-pink);
+  font-size: 10px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+.delete-input {
+  width: 100%;
+  padding: 12px;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid var(--text-dim);
+  color: var(--text-main);
+  font-family: inherit;
+  margin-bottom: 15px;
+}
+.delete-input:focus {
+  border-color: var(--neon-pink);
+  outline: none;
+}
+.delete-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.delete-cancel {
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid var(--text-dim);
+  padding: 10px 20px;
+  cursor: pointer;
+}
+.delete-confirm {
+  background: transparent;
+  color: var(--neon-pink);
+  border: 1px solid var(--neon-pink);
+  padding: 10px 20px;
+  cursor: pointer;
+}
+.delete-confirm:hover {
+  background: rgba(255,45,120,0.2);
+}
+  </style>
+  
+  <!-- Non-critical CSS loaded asynchronously -->
+  <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" onload="this.media='all'">
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"></noscript>
+  <link rel="stylesheet" href="style.css?v=13">
+  <noscript><link rel="stylesheet" href="style.css?v=13"></noscript>
+  <link rel="stylesheet" href="mobile-fix.css?v=5">
+  <noscript><link rel="stylesheet" href="mobile-fix.css?v=5"></noscript>
+</head>
+<body>
+  <a href="#options" class="skip-link">Skip to options</a>
+  <div class="crt-overlay"></div>
+  <!-- iOS Notification -->
+  <div id="ios-notification" class="ios-notification hidden">
+    <span class="notification-icon">👤</span>
+    <span class="notification-text" id="notification-text"></span>
+  </div>
+  <main role="main">
+  <!-- ── LOAD ERROR ──────────────────────────── -->
+  <div id="load-error" hidden role="alert" style="position:fixed;top:0;left:0;right:0;padding:12px;background:#ff2d78;color:#fff;font-family:monospace;text-align:center;z-index:99999;"></div>
+  <!-- ── MENU SCREEN ────────────────────────── -->
+  <div id="menu-screen" class="game-container">
+    <h1 class="game-title">
+      PIXEL<br>WORD<br>HUNTER
+    </h1>
+    <div class="edition-badge">// TOEIC EDITION //</div>
+    <div class="stats-line" aria-live="polite">
+      MASTERED&nbsp;<span id="mastered-count">0</span>&nbsp;/&nbsp;<span id="total-count">0</span>
+    </div>
+    <p class="blink" aria-hidden="true">▸ PRESS HUNT ◂</p>
+    
+    <!-- Auth Buttons (до логина) -->
+<div class="auth-buttons" id="auth-buttons">
+  <button class="auth-btn" onclick="showAuthModal('login')">▶ LOGIN</button>
+  <button class="auth-btn register-btn" onclick="showAuthModal('register')">▶ REGISTER</button>
+</div>
+
+    <!-- Hunt Button (после логина) -->
+    <button class="start-btn hunt-btn hidden" id="hunt-btn" onclick="
+      document.getElementById('menu-screen').classList.add('hidden'); 
+      document.getElementById('category-screen').classList.remove('hidden');" role="button">▶&nbsp;HUNT</button>
+    <button class="settings-btn" role="button" onclick="showSettings()">SETTINGS</button>
+    <div class="credits">© 2026 ALMAZ CORP</div>
+  </div>
+  <!-- ── SETTINGS SCREEN ─────────────────────── -->
+  <div id="settings-screen" class="game-container hidden" role="region" aria-label="Settings">
+    <button class="back-btn" role="button" onclick="goBackFromSettings()">◀ BACK</button>
+    <h2 class="screen-title">// SETTINGS //</h2>
+    
+    <div class="settings-content">
+      <!-- Theme selector -->
+      <div class="settings-row">
+        <span class="settings-label" id="theme-label">THEME</span>
+        <div class="theme-btns" role="group" aria-labelledby="theme-label">
+          <button class="theme-btn active" role="button" data-theme="cyberpunk" onclick="setTheme('cyberpunk')" title="Cyberpunk" aria-label="Cyberpunk theme">
+            <span class="theme-dot cyberpunk" aria-hidden="true"></span>CYB
+          </button>
+          <button class="theme-btn" role="button" data-theme="midnight" onclick="setTheme('midnight')" title="Midnight" aria-label="Midnight theme">
+            <span class="theme-dot midnight" aria-hidden="true"></span>MID
+          </button>
+          <button class="theme-btn" role="button" data-theme="matrix" onclick="setTheme('matrix')" title="Matrix" aria-label="Matrix theme">
+            <span class="theme-dot matrix" aria-hidden="true"></span>MTX
+          </button>
+          <button class="theme-btn" role="button" data-theme="3310" onclick="setTheme('3310')" title="3310" aria-label="3310 Nokia theme">
+            <span class="theme-dot t3310" aria-hidden="true"></span>3310
+          </button>
+          <button class="theme-btn" role="button" data-theme="sunset" onclick="setTheme('sunset')" title="Sunset" aria-label="Sunset theme">
+            <span class="theme-dot sunset" aria-hidden="true"></span>SUN
+          </button>
+          <button class="theme-btn" role="button" data-theme="mono" onclick="setTheme('mono')" title="Mono" aria-label="Mono theme">
+            <span class="theme-dot mono" aria-hidden="true"></span>MON
+          </button>
+        </div>
+      </div>
+      
+      <!-- Sound toggle -->
+      <div class="settings-row">
+        <span class="settings-label">SOUND</span>
+        <button id="settings-sound-btn" class="sound-toggle-btn" role="button" onclick="toggleMute()" aria-pressed="false">
+          <span id="settings-sound-icon" aria-label="Sound on">🔊</span>
+          <span id="settings-sound-label">ON</span>
+        </button>
+      </div>
+      
+      <!-- Reset progress -->
+      <div class="settings-reset">
+  <button class="reset-btn" role="button" onclick="resetProgress()">RESET PROGRESS</button>
+  <button class="delete-account-btn" role="button" onclick="showDeleteAccountModal()">DELETE ACCOUNT</button>
+</div>
+    </div>
+  </div>
+  <!-- ── CATEGORY SCREEN ────────────────────── -->
+  <div id="category-screen" class="game-container hidden" role="region" aria-label="Category selection">
+    <button class="back-btn" role="button" onclick="goBack()">◀ BACK</button>
+    <h2 class="screen-title">// SELECT CATEGORY //</h2>
+    <div id="category-list" class="category-grid" role="list"></div>
+  </div>
+  <!-- ── GAME SCREEN ────────────────────────── -->
+  <div id="game-screen" class="game-container hidden" role="region" aria-label="Game">
+    <header>
+      <div class="stat">CAT:&nbsp;<span id="category">ALL</span></div>
+      <div class="header-actions">
+        <div class="stat header-xp">XP:&nbsp;<span id="xp" aria-live="polite">0</span></div>
+        <button class="icon-btn exit-icon-btn" role="button" onclick="exitGame()" title="Exit to menu" aria-label="Exit to menu">✕</button>
+      </div>
+    </header>
+    <div id="quiz-box">
+      <div class="question-card">
+        <h1 id="word" aria-live="polite"></h1>
+      </div>
+      <div class="options-grid" id="options" role="group" aria-label="Answer options"></div>
+    </div>
+    <div id="explanation-modal" class="modal hidden" role="dialog" aria-modal="true" aria-label="Word review">
+      <h2 class="modal-title">// WORD REVIEW //</h2>
+      <div id="explanation-list"></div>
+      <button class="next-btn" role="button" onclick="nextQuestion()">NEXT&nbsp;▶</button>
+    </div>
+    <div id="feedback" class="hidden" aria-live="polite"></div>
+  </div>
+  <!-- ── AUTH MODAL ─────────────────────────── -->
+  <div id="auth-modal" class="modal auth-modal hidden" role="dialog" aria-modal="true" aria-label="Authentication">
+    <div class="auth-container">
+      <h2 class="modal-title" id="auth-title">// LOGIN //</h2>
+      
+      <form id="auth-form" class="auth-form" onsubmit="return false;">
+        <div class="auth-field" id="username-field" style="display:none;">
+          <label>USERNAME</label>
+          <input type="text" id="auth-username" placeholder="Enter username" autocomplete="username">
+        </div>
+        
+        <div class="auth-field">
+          <label>EMAIL</label>
+          <input type="email" id="auth-email" placeholder="Enter email" autocomplete="email" required>
+        </div>
+        
+        <div class="auth-field">
+          <label>PASSWORD</label>
+          <input type="password" id="auth-password" placeholder="Enter password" autocomplete="current-password" required>
+        </div>
+        
+        <div id="auth-error" class="auth-error"></div>
+        
+        <button type="button" class="auth-submit" id="auth-submit-btn">ENTER</button>
+      </form>
+      
+      <div class="auth-toggle">
+        <span id="auth-toggle-text">Need an account?</span>
+        <button type="button" class="auth-toggle-btn" onclick="document.getElementById('username-field').style.display=document.getElementById('username-field').style.display==='flex'?'none':'flex'; 
+          document.getElementById('auth-title').textContent=document.getElementById('auth-title').textContent==='// REGISTER //'?'// LOGIN //':'// REGISTER //';">REGISTER</button>
+      </div>
+      
+     <button class="auth-close" onclick="document.getElementById('auth-modal').classList.add('hidden');">✕</button>
+    </div>
+  </div>
+
+
+
+    <div id="delete-modal" class="modal delete-modal hidden" role="dialog" aria-modal="true" aria-label="Delete Account">
+  <div class="modal-container">
+    <h2 class="modal-title">// DELETE ACCOUNT //</h2>
+    <p class="delete-warning">⚠️ This action is irreversible!</p>
+    <p style="font-size:9px;color:var(--text-dim);margin-bottom:15px;">Enter password:</p>
+    <form>
+    <input type="password" id="delete-password" class="delete-input" placeholder="Password" autocomplete="new-password">
+      </form>
+    <div id="delete-error" class="auth-error"></div>
+    <div class="delete-actions">
+      <button class="delete-cancel" onclick="closeDeleteModal()">CANCEL</button>
+      <button class="delete-confirm" id="delete-confirm-btn">DELETE</button>
+    </div>
+  </div>
+</div>
+  </main>
+
+  <!-- Game Bundle -->
+<script type="module" src="app.js"></script>
+  <!-- Firebase SDK (добавь свой config) -->
+
+<script type="module">
+const firebaseConfig = {
+  apiKey: "AIzaSyCgKKrHIaDNzjUIaK2Z-Usf587px-lPMSY",
+  authDomain: "pixelwordhunter.firebaseapp.com",
+  projectId: "pixelwordhunter",
+  storageBucket: "pixelwordhunter.firebasestorage.app",
+  messagingSenderId: "1094897769595",
+  appId: "1:1094897769595:web:392a30ef42f3b558b896de",
+  measurementId: "G-X90YSQL16F"
+};
+
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { getFirestore, doc, setDoc, getDoc, updateDoc ,deleteDoc,writeBatch} from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+//const db = getFirestore(app);
+window.firebaseAuth = auth;
+window.firebaseDb = db;
+  
+let isRegisterMode = false;
+
+// 🔥 ВСЕ ФУНКЦИИ FIREBASE
+window.showAuthModal = (mode) => {
+  isRegisterMode = mode === 'register';
+  document.getElementById('auth-title').textContent = isRegisterMode ? '// REGISTER //' : '// LOGIN //';
+  document.getElementById('username-field').style.display = isRegisterMode ? 'flex' : 'none';
+  document.getElementById('auth-modal').classList.remove('hidden');
+  document.getElementById('auth-error').textContent = '';
+};
+
+window.toggleAuthMode = () => {
+  isRegisterMode = !isRegisterMode;
+  document.getElementById('auth-title').textContent = isRegisterMode ? '// REGISTER //' : '// LOGIN //';
+  document.getElementById('username-field').style.display = isRegisterMode ? 'flex' : 'none';
+  document.getElementById('auth-toggle-text').textContent = isRegisterMode ? 'Have account?' : 'Need an account?';
+  document.querySelector('.auth-toggle-btn').textContent = isRegisterMode ? 'LOGIN' : 'REGISTER';
+};
+
+window.closeAuthModal = () => {
+  document.getElementById('auth-modal').classList.add('hidden');
+  document.getElementById('auth-error').textContent = '';
+};
+
+window.handleAuthSubmit = async () => {
+  const email = document.getElementById('auth-email').value.trim();
+  const password = document.getElementById('auth-password').value;
+  const username = document.getElementById('auth-username').value.trim();
+  const errorEl = document.getElementById('auth-error');
+  
+  if (!email || !password) {
+    errorEl.textContent = 'Email and password required';
+    return;
+  }
+
+  errorEl.textContent = 'Loading...';
+
+  try {
+    let userCredential;
+    
+    if (isRegisterMode) {
+      if (!username) throw new Error('Enter username');
+      userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      
+      await setDoc(doc(db, "users", userCredential.user.uid), {
+        username,
+        email,
+        xp: 0,
+        level: 1,
+        category: "Beginner",
+        mastered: 0,
+        total: 600,
+        createdAt: new Date().toISOString()
+      });
+    } else {
+      userCredential = await signInWithEmailAndPassword(auth, email, password);
+    }
+    
+    closeAuthModal();
+    showWelcomeNotification(userCredential.user);
+    
+  } catch (error) {
+    errorEl.textContent = error.message.includes('auth/user-not-found') ? 'User not found' : 
+                         error.message.includes('auth/wrong-password') ? 'Wrong password' :
+                         error.message.includes('auth/email-already') ? 'Email already exists' :
+                         error.message;
+  }
+};
+
+window.logout = async () => {
+  await signOut(auth);
+  document.getElementById('hunt-btn').classList.add('hidden');
+  document.getElementById('auth-buttons').classList.remove('hidden');
+  document.getElementById('mastered-count').textContent = '0';
+  document.getElementById('total-count').textContent = '600';
+};
+
+// Delete Account Modal
+window.showDeleteAccountModal = () => {
+  document.getElementById('delete-modal').classList.remove('hidden');
+  document.getElementById('delete-password').value = '';
+  document.getElementById('delete-error').textContent = '';
+};
+window.closeDeleteModal = () => {
+  document.getElementById('delete-modal').classList.add('hidden');
+};
+// Delete Account handler
+document.getElementById('delete-confirm-btn')?.addEventListener('click', async () => {
+  const password = document.getElementById('delete-password').value;
+  const errorEl = document.getElementById('delete-error');
+  const deleteBtn = document.getElementById('delete-confirm-btn');
+  const user = auth.currentUser;
+  
+  if (!user) { errorEl.textContent = 'Not logged in'; return; }
+  if (!password) { errorEl.textContent = 'Enter password'; return; }
+  // Loading state
+  deleteBtn.disabled = true;
+  deleteBtn.textContent = 'DELETING...';
+  
+try {
+    // Re-authenticate
+    await signInWithEmailAndPassword(auth, user.email, password);
+    
+    // Batch delete - атомарная операция
+    const batch = writeBatch(db);
+    batch.delete(doc(db, "users", user.uid));
+    await batch.commit();
+    
+    // Delete Auth account
+    await user.delete();
+    
+    alert('Account deleted!');
+    window.location.reload();
+  } catch (error) {
+    // console.error('Delete error:', error);
+    errorEl.textContent = error.message.includes('wrong-password') ? 'Wrong password' : error.message;
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = 'DELETE';
+  }
+});
+  
+function showWelcomeNotification(user) {
+  const notif = document.getElementById('ios-notification');
+const displayName = user.displayName || user.email.split('@')[0];
+  document.getElementById('notification-text').textContent = `Welcome, ${displayName}!`;
+  notif.classList.remove('hidden');
+  notif.classList.add('show');
+  setTimeout(() => {
+    notif.classList.remove('show');
+    setTimeout(() => notif.classList.add('hidden'), 400);
+  }, 3000);
+}
+
+async function loadUserProgress(user) {
+  try {
+    const userDoc = await getDoc(doc(db, "users", user.uid));
+    if (userDoc.exists()) {
+      const data = userDoc.data();
+      document.getElementById('mastered-count').textContent = data.mastered || 0;
+      document.getElementById('total-count').textContent = data.total || 600;
+      const xpEl = document.getElementById('xp');
+      if (xpEl) xpEl.textContent = data.xp || 0;
+    }
+  } catch (e) {
+    //console.error('Load progress error:', e);
+  }
+}
+
+// ✅ КРИТИЧЕСКИ ВАЖНО: ВСЁ в DOMContentLoaded
+document.addEventListener('DOMContentLoaded', () => {
+  // Firebase автологин
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      document.getElementById('hunt-btn').classList.remove('hidden');
+      document.getElementById('auth-buttons').classList.add('hidden');
+      await loadUserProgress(user);
+      // Добавляем кнопку logout в user-info
+      let userInfo = document.querySelector('.user-info');
+      if (!userInfo) {
+        userInfo = document.createElement('div');
+        userInfo.className = 'user-info';
+        document.querySelector('.game-title').parentNode.appendChild(userInfo);
+      }
+      userInfo.innerHTML = `👤 ${user.email.split('@')[0]} <button onclick="logout()">LOGOUT</button>`;
+    } else {
+      document.getElementById('hunt-btn').classList.add('hidden');
+      document.getElementById('auth-buttons').classList.remove('hidden');
+      const userInfo = document.querySelector('.user-info');
+      if (userInfo) userInfo.remove();
+    }
+  });
+  // Обработчики событий
+  document.getElementById('auth-submit-btn')?.addEventListener('click', handleAuthSubmit);
+  document.querySelector('.auth-toggle-btn')?.addEventListener('click', toggleAuthMode);
+  document.querySelector('.auth-close')?.addEventListener('click', closeAuthModal);
+});
+</script>
+</body>
+</html>
